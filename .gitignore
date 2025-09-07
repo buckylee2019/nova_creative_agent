@@ -149,3 +149,5 @@ cython_debug/
 local_test.py
 scratch.py
 debug.py
+deploy_script.py
+dpa_config.py

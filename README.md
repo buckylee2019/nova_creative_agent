@@ -73,16 +73,13 @@ dpa-agent/
 
 Set up an S3 bucket for storing generated images. You can either:
 
-**Option A: Use .env file (Recommended)**
+**Option A: Use deployment script (Recommended)**
 ```bash
 # Create or edit .env file
-echo "DPA_S3_BUCKET=your-dpa-images-bucket" > .env
+sh ./cfn/deploy-assets.sh
 ```
 
-**Option B: Set environment variable**
-```bash
-export DPA_S3_BUCKET=your-dpa-images-bucket
-```
+**Option B: Manually create on AWS Console**
 
 The deployment script will create the bucket if it doesn't exist.
 
@@ -91,26 +88,14 @@ The deployment script will create the bucket if it doesn't exist.
 ```bash
 pip install --upgrade pip
 pip install bedrock-agentcore-starter-toolkit
-pip install -r agentcore_requirements.txt
+pip install -r requirements.txt
 ```
 
-### 4. Test Locally (Optional)
+### 4. Deploy to AWS
 
-```bash
-python test_agentcore_agent.py
-```
-
-### 5. Deploy to AWS
-
-**Option A: Automated Deployment**
-```bash
-python deploy_script.py
-```
-
-**Option B: Manual Deployment**
 ```bash
 # Configure
-agentcore configure -e agentcore_dpa_agent.py
+agentcore configure -e dpa_agent.py
 
 # Deploy
 agentcore launch
@@ -118,6 +103,10 @@ agentcore launch
 # Test
 agentcore invoke '{"prompt": "Create a luxury watch advertisement"}'
 ```
+
+### 5. Check your Agentcore IAM role
+
+Add `s3:putObject` and `s3:getObject` permission to runtime role.
 
 ### 6. Use Your Deployed Agent
 
