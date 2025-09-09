@@ -85,11 +85,11 @@ class AgentCoreClient:
         # Get agent ARN from environment or use default
         self.agent_arn = os.getenv(
             "AGENTCORE_AGENT_ARN", 
-            "arn:aws:bedrock-agentcore:us-west-2:322216473749:runtime/dpa_agent-D8Xdy45Kiy"
+            ""
         )
         
         # Choose invocation method: 'cli' or 'boto3'
-        self.method = os.getenv("AGENTCORE_METHOD", "cli")
+        self.method = os.getenv("AGENTCORE_METHOD", "boto3")
         
         if self.method == "boto3":
             # Initialize boto3 client for bedrock-agentcore

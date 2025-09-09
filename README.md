@@ -2,6 +2,10 @@
 
 This project demonstrates how to deploy a Dynamic Product Advertising (DPA) Agent built with Strands Agents to AWS AgentCore Runtime. The agent specializes in creating product advertising content using Amazon Nova models.
 
+## 🎬 Demo
+
+[Watch the demo video](https://www.youtube.com/watch?v=_dK1NUiU--U)
+
 ## 🎯 What This Agent Does
 
 The DPA Agent is a specialized AI assistant for product advertising that can:
@@ -12,7 +16,7 @@ The DPA Agent is a specialized AI assistant for product advertising that can:
 - Edit/modify parts of images (inpainting)
 - Optimize prompts for better visual results
 
-### 🎬 Video Creation (Nova Reel)
+### 🎬 Video Creation (Nova Reel) (Work In Progress)
 - Generate product showcase videos (up to 6 seconds)
 - Support multiple aspect ratios (16:9, 9:16, 1:1)
 - Async video generation with status monitoring
@@ -22,41 +26,88 @@ The DPA Agent is a specialized AI assistant for product advertising that can:
 - Analyze product images for advertising effectiveness
 - Provide creative optimization suggestions
 
-## 🏗️ Architecture
+## 🏗️ AWS Architecture
 
+```mermaid
+graph TB
+    User[👤 User] --> DPA[🎨 DPA Agent<br/>Strands Framework]
+    
+    
+    AC --> DPA[🎨 DPA Agent<br/>Strands Framework]
+    DPA --> MCP[🔧 MCP Server<br/>Nova Tools]
+    
+    MCP --> Nova1[🎨 Nova Canvas<br/>Image Generation]
+    MCP --> Nova2[🎬 Nova Reel<br/>Video Creation] 
+    MCP --> Nova3[📝 Nova Pro<br/>Text Analysis]
+    
+    DPA --> S3[🪣 S3 Bucket<br/>Asset Storage]
+    S3 --> CF
+    
+    subgraph "AWS Services"
+        AC[🤖 AgentCore Runtime]
+        S3
+        CF[☁️ CloudFront Distribution]
+        Nova1
+        Nova2
+        Nova3
+        CDN --> MCP
+    end
+    
+    subgraph "Generated Assets"
+        S3 --> Images[🖼️ Product Images]
+        S3 --> Videos[🎥 Product Videos]
+        S3 --> Copy[📄 Marketing Copy]
+    end
+    
+    CF --> CDN[🌐 Global CDN<br/>Asset Delivery]
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   User Request  │───▶│  AgentCore       │───▶│  DPA Agent      │
-│                 │    │  Runtime         │    │  (Strands)      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                         │
-                                                         ▼
-                                               ┌─────────────────┐
-                                               │  MCP Server     │
-                                               │  (Nova Tools)   │
-                                               └─────────────────┘
-                                                         │
-                                                         ▼
-                                               ┌─────────────────┐
-                                               │  Amazon Nova    │
-                                               │  Models         │
-                                               └─────────────────┘
+
+## 🔧 Local MCP Development
+
+To use the DPA MCP server locally with MCP-compatible clients:
+
+### Configuration File (`mcp.json`)
+```json
+{
+  "mcpServers": {
+    "dpa-server": {
+      "command": "python",
+      "args": ["/path_to_your_dir/dpa_mcp_server.py"],
+      "env": {
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "DPA_S3_BUCKET": "your-s3-bucket-name",
+        "CLOUDFRONT_DOMAIN": "your-cloudfront-domain"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+- `generate_image` - Create product advertising images with Nova Canvas
+- `generate_video` - Create product videos with Nova Reel  
+- `analyze_image` - Analyze product images with Nova Pro
+- `optimize_prompt` - Enhance image generation prompts
+
+### Usage with MCP Clients
+```bash
+# Install MCP client (example with Claude Desktop)
+# Add the mcp_config.json to your MCP client configuration
+
+# Test the server directly
+python dpa_mcp_server.py
 ```
 
 ## 📁 Project Structure
 
 ```
 dpa-agent/
-├── agentcore_dpa_agent.py      # AgentCore-compatible agent
-├── dpa_agent.py                # Original Strands agent
+├── dpa_agent.py                # Strands agent
 ├── dpa_mcp_server.py           # MCP server with Nova tools
-├── agentcore_requirements.txt  # Dependencies for deployment
-├── requirements.txt            # Original requirements
-├── deploy_script.py            # Automated deployment script
-├── test_agentcore_agent.py     # Local testing script
+├── requirements.txt            # Requirements for deployment
 ├── deploy_to_agentcore.md      # Detailed deployment guide
 ├── __init__.py                 # Python package marker
-└── README_AGENTCORE.md         # This file
+└── README.md         # This file
 ```
 
 ## 🚀 Quick Start
@@ -150,28 +201,6 @@ The agent uses these models by default:
 - **Video Generation**: Amazon Nova Reel  
 - **Text Analysis**: Amazon Nova Pro
 
-## 📊 Monitoring
-
-### CloudWatch Integration
-- Automatic logging to CloudWatch Logs
-- Structured log format for easy searching
-- Error tracking and performance metrics
-
-### Health Monitoring
-```bash
-# Check agent health
-curl https://your-agent-endpoint/health
-
-# Expected response
-{"status": "healthy", "agent_ready": true}
-```
-
-### AgentCore Observability
-Enable in AWS Console for:
-- Request tracing
-- Performance analytics
-- Error analysis
-- Usage patterns
 
 ## 🎨 Example Use Cases
 
@@ -225,135 +254,9 @@ Enable in AWS Console for:
   ]
 }
 ```
+
 *Upload multiple images for complex advertising tasks like virtual try-on, background replacement, or image comparison.*
 
-### Marketing Copy
-```json
-{
-  "prompt": "Write compelling marketing copy for a sustainable water bottle targeting environmentally conscious consumers"
-}
-```
-
-### Video Creation
-```json
-{
-  "prompt": "Create a 6-second product showcase video for wireless earbuds with a modern, tech-focused aesthetic"
-}
-```
-*Videos are saved to your configured S3 bucket and accessible via presigned URLs.*
-
-## 🔒 Security & Permissions
-
-### Required IAM Permissions
-
-The agent needs permissions for:
-- Amazon Bedrock model invocation
-- S3 access (for image and video storage)
-  - `s3:PutObject` - Upload generated images
-  - `s3:GetObject` - Generate presigned URLs
-  - `s3:CreateBucket` - Create bucket if needed
-- CloudWatch logging
-- AgentCore runtime operations
-
-### Authentication Options
-
-1. **No Auth** (development/testing)
-2. **OAuth Integration** (production)
-3. **API Keys** (programmatic access)
-4. **AWS IAM** (service-to-service)
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **Model Access Denied**
-   ```
-   Solution: Enable model access in Bedrock console
-   ```
-
-2. **MCP Server Connection Failed**
-   ```
-   Solution: Ensure dpa_mcp_server.py is in the project directory
-   ```
-
-3. **Deployment Timeout**
-   ```
-   Solution: Check CloudWatch logs for detailed error messages
-   ```
-
-4. **Agent Not Responding**
-   ```
-   Solution: Check health endpoint and restart if needed
-   ```
-
-### Debug Commands
-
-```bash
-# Check deployment status
-agentcore status
-
-# View recent logs
-agentcore logs
-
-# Test connectivity
-agentcore invoke '{"prompt": "Hello"}'
-
-# Update deployment
-agentcore launch --update
-```
-
-## 📈 Performance Optimization
-
-### Response Times
-- **Text Generation**: ~2-5 seconds
-- **Image Generation**: ~10-30 seconds
-- **Video Generation**: ~60-180 seconds (async)
-
-### Scaling Considerations
-- AgentCore Runtime auto-scales based on demand
-- Consider request batching for high-volume scenarios
-- Use async patterns for video generation
-
-### Cost Optimization
-- Monitor token usage in CloudWatch
-- Use appropriate model sizes for different tasks
-- Implement request caching where appropriate
-
-## 🔄 CI/CD Integration
-
-### GitHub Actions Example
-
-```yaml
-name: Deploy DPA Agent
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      
-      - name: Install dependencies
-        run: |
-          pip install bedrock-agentcore-starter-toolkit
-          pip install -r agentcore_requirements.txt
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      
-      - name: Deploy agent
-        run: python deploy_script.py
-```
 
 ## 📚 Additional Resources
 
@@ -362,13 +265,6 @@ jobs:
 - [Amazon Nova Models](https://docs.aws.amazon.com/bedrock/latest/userguide/nova-models.html)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test locally with `python test_agentcore_agent.py`
-5. Submit a pull request
 
 ## 📄 License
 
@@ -376,4 +272,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Ready to deploy your DPA Agent to production? Start with `python deploy_script.py`** 🚀

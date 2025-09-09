@@ -33,8 +33,8 @@ class DPAAgentDeployer:
     
     def __init__(self):
         self.project_dir = Path.cwd()
-        self.agent_file = "agentcore_dpa_agent.py"
-        self.requirements_file = "agentcore_requirements.txt"
+        self.agent_file = "dpa_agent.py"
+        self.requirements_file = "requirements.txt"
         self.mcp_server_file = "dpa_mcp_server.py"
         
     def validate_environment(self):
@@ -132,12 +132,112 @@ class DPAAgentDeployer:
                     )
                 logger.info(f"✅ Created S3 bucket: {s3_bucket}")
             
-            # Set up bucket policy for the agent (optional - for public read access)
-            # Note: In production, you might want more restrictive policies
+            # Set up bucket policy for public read access
+            bucket_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicReadGetObject",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"arn:aws:s3:::{s3_bucket}/*"
+                    }
+                ]
+            }
+            
+            s3_client.put_bucket_policy(
+                Bucket=s3_bucket,
+                Policy=json.dumps(bucket_policy)
+            )
+            
+            # Enable CORS
+            cors_config = {
+                'CORSRules': [
+                    {
+                        'AllowedHeaders': ['*'],
+                        'AllowedMethods': ['GET', 'HEAD'],
+                        'AllowedOrigins': ['*'],
+                        'MaxAgeSeconds': 3000
+                    }
+                ]
+            }
+            
+            s3_client.put_bucket_cors(Bucket=s3_bucket, CORSConfiguration=cors_config)
+            
+            # Setup CloudFront distribution
+            self.setup_cloudfront_distribution(s3_bucket)
             
         except Exception as e:
             logger.warning(f"⚠️  S3 bucket setup failed: {e}")
             logger.info("You may need to create the bucket manually or check permissions")
+    
+    def setup_cloudfront_distribution(self, bucket_name):
+        """Set up CloudFront distribution for S3 bucket."""
+        logger.info(f"☁️ Setting up CloudFront distribution for {bucket_name}")
+        
+        try:
+            cloudfront = boto3.client('cloudfront')
+            region = boto3.Session().region_name or 'us-east-1'
+            origin_domain = f"{bucket_name}.s3.{region}.amazonaws.com"
+            
+            # Check if distribution already exists
+            existing_domain = os.getenv("CLOUDFRONT_DOMAIN")
+            if existing_domain:
+                logger.info(f"✅ CloudFront domain already configured: {existing_domain}")
+                return existing_domain
+            
+            distribution_config = {
+                'CallerReference': f"dpa-agent-{int(__import__('time').time())}",
+                'Comment': f'DPA Agent Assets Distribution - {bucket_name}',
+                'DefaultCacheBehavior': {
+                    'TargetOriginId': bucket_name,
+                    'ViewerProtocolPolicy': 'redirect-to-https',
+                    'MinTTL': 0,
+                    'DefaultTTL': 86400,
+                    'MaxTTL': 31536000,
+                    'ForwardedValues': {
+                        'QueryString': False,
+                        'Cookies': {'Forward': 'none'}
+                    },
+                    'TrustedSigners': {
+                        'Enabled': False,
+                        'Quantity': 0
+                    }
+                },
+                'Origins': {
+                    'Quantity': 1,
+                    'Items': [
+                        {
+                            'Id': bucket_name,
+                            'DomainName': origin_domain,
+                            'S3OriginConfig': {
+                                'OriginAccessIdentity': ''
+                            }
+                        }
+                    ]
+                },
+                'Enabled': True,
+                'PriceClass': 'PriceClass_100'
+            }
+            
+            response = cloudfront.create_distribution(DistributionConfig=distribution_config)
+            distribution_id = response['Distribution']['Id']
+            domain_name = response['Distribution']['DomainName']
+            
+            logger.info(f"✅ CloudFront distribution created: {distribution_id}")
+            logger.info(f"📡 Domain: https://{domain_name}")
+            logger.info("⏳ Distribution is deploying (this may take 10-15 minutes)")
+            
+            # Update environment variables
+            os.environ["CLOUDFRONT_DOMAIN"] = domain_name
+            os.environ["CLOUDFRONT_DISTRIBUTION_ID"] = distribution_id
+            
+            return domain_name
+            
+        except Exception as e:
+            logger.warning(f"⚠️  CloudFront setup failed: {e}")
+            logger.info("You may need to create the distribution manually")
     
     def setup_project_structure(self):
         """Set up the proper project structure."""
@@ -237,10 +337,16 @@ class DPAAgentDeployer:
                 logger.info(f"📝 Added DPA_S3_BUCKET: {s3_bucket}")
             
             # Add CloudFront endpoint if configured
-            cloudfront_endpoint = os.getenv("CLOUDFRONT_ENDPOINT")
-            if cloudfront_endpoint:
-                env_vars["CLOUDFRONT_ENDPOINT"] = cloudfront_endpoint
-                logger.info(f"📝 Added CLOUDFRONT_ENDPOINT: {cloudfront_endpoint}")
+            cloudfront_domain = os.getenv("CLOUDFRONT_DOMAIN")
+            if cloudfront_domain:
+                env_vars["CLOUDFRONT_DOMAIN"] = cloudfront_domain
+                logger.info(f"📝 Added CLOUDFRONT_DOMAIN: {cloudfront_domain}")
+            
+            # Add CloudFront distribution ID if configured
+            cloudfront_distribution_id = os.getenv("CLOUDFRONT_DISTRIBUTION_ID")
+            if cloudfront_distribution_id:
+                env_vars["CLOUDFRONT_DISTRIBUTION_ID"] = cloudfront_distribution_id
+                logger.info(f"📝 Added CLOUDFRONT_DISTRIBUTION_ID: {cloudfront_distribution_id}")
             
             # Add AWS region
             aws_region = os.getenv("AWS_DEFAULT_REGION") or boto3.Session().region_name or "us-east-1"
